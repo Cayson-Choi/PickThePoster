@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>이미지 투표</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 10px; }
+
+  h1 { text-align: center; margin: 8px 0 4px; font-size: 1.3em; color: #e94560; }
+  .subtitle { text-align: center; color: #aaa; margin-bottom: 12px; font-size: 0.8em; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #16213e;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .img-wrap {
+    cursor: pointer;
+    position: relative;
+  }
+  .img-wrap img {
+    width: 100%;
+    display: block;
+  }
+
+  .bar-bg { height: 3px; background: #0f3460; }
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e94560, #ff6b6b);
+    transition: width 0.5s ease;
+  }
+
+  .card-footer {
+    padding: 3px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .card-name { font-weight: bold; font-size: 0.7em; }
+  .vote-count { font-size: 0.65em; color: #aaa; }
+
+  .vote-btn {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    border: none;
+    background: linear-gradient(135deg, #e94560, #c23152);
+    color: white;
+    font-size: 0.75em;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .vote-btn:active { opacity: 0.7; }
+
+  .bottom-bar {
+    text-align: center;
+    margin: 12px 0;
+    color: #aaa;
+    font-size: 0.85em;
+  }
+  .reset-btn {
+    background: none;
+    border: 1px solid #555;
+    color: #888;
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8em;
+    margin-left: 8px;
+  }
+  .reset-btn:hover { border-color: #e94560; color: #e94560; }
+
+  /* 전체화면 오버레이 */
+  .overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  .overlay.active { display: flex; }
+  .overlay img {
+    max-width: 95vw;
+    max-height: 90vh;
+    object-fit: contain;
+  }
+  .overlay-close {
+    position: absolute;
+    top: 10px; right: 15px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    font-size: 1.8em;
+    cursor: pointer;
+    z-index: 1001;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .overlay-info {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 1em;
+    color: #ccc;
+  }
+  .overlay-vote-btn {
+    margin-top: 10px;
+    padding: 10px 40px;
+    border: none;
+    background: linear-gradient(135deg, #e94560, #c23152);
+    color: white;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 25px;
+  }
+  .overlay-vote-btn:active { opacity: 0.7; }
+
+  /* PC에서 좀 더 크게 */
+  @media (min-width: 700px) {
+    .grid { max-width: 800px; gap: 14px; }
+    .card-name { font-size: 0.9em; }
+    .vote-count { font-size: 0.8em; }
+    .vote-btn { padding: 8px; font-size: 0.9em; }
+    h1 { font-size: 1.8em; }
+  }
+</style>
+</head>
+<body>
+
+<h1>이미지 투표</h1>
+<p class="subtitle">이미지를 터치하면 크게 볼 수 있어요</p>
+
+<div class="grid" id="grid"></div>
+<div class="bottom-bar">
+  총 투표 수: <strong id="totalVotes">0</strong>
+  <button class="reset-btn" onclick="resetVotes()">초기화</button>
+</div>
+
+<!-- 전체화면 미리보기 -->
+<div class="overlay" id="overlay">
+  <button class="overlay-close" onclick="closeOverlay()">&times;</button>
+  <img id="overlayImg" src="" alt="">
+  <div class="overlay-info" id="overlayInfo"></div>
+  <button class="overlay-vote-btn" id="overlayVoteBtn">투표하기</button>
+</div>
+
+<script>
+const IMAGES = ['1.png','2.png','3.png','4.png','5.png','6.png','7.png','8.png','9.png'];
+const STORAGE_KEY = 'image_votes';
+
+function getVotes() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) return JSON.parse(saved);
+  const votes = {};
+  IMAGES.forEach(img => votes[img] = 0);
+  return votes;
+}
+
+function saveVotes(votes) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(votes));
+}
+
+function getTotal(votes) {
+  return Object.values(votes).reduce((a, b) => a + b, 0);
+}
+
+function render() {
+  const votes = getVotes();
+  const total = getTotal(votes);
+  const max = Math.max(...Object.values(votes), 1);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  IMAGES.forEach(img => {
+    const count = votes[img];
+    const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+    const barW = total > 0 ? (count / max) * 100 : 0;
+    const name = img.replace('.png', '');
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="img-wrap" onclick="openOverlay('${img}', '#${name}')">
+        <img src="${img}" alt="Image ${name}" loading="lazy">
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${barW}%"></div></div>
+      <div class="card-footer">
+        <span class="card-name">#${name}</span>
+        <span class="vote-count">${count}표 (${pct}%)</span>
+      </div>
+      <button class="vote-btn" onclick="vote('${img}')">투표</button>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById('totalVotes').textContent = total;
+}
+
+function vote(img) {
+  const votes = getVotes();
+  votes[img]++;
+  saveVotes(votes);
+  render();
+}
+
+let currentOverlayImg = '';
+
+function openOverlay(img, name) {
+  currentOverlayImg = img;
+  document.getElementById('overlayImg').src = img;
+  document.getElementById('overlayInfo').textContent = name;
+  document.getElementById('overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeOverlay();
+});
+
+document.getElementById('overlayVoteBtn').addEventListener('click', function() {
+  vote(currentOverlayImg);
+  closeOverlay();
+});
+
+function resetVotes() {
+  if (confirm('모든 투표를 초기화하시겠습니까?')) {
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+  }
+}
+
+render();
+</script>
+</body>
+</html>
