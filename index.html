@@ -206,7 +206,7 @@ function render() {
         <span class="card-name">#${name}</span>
         <span class="vote-count">${count}표 (${pct}%)</span>
       </div>
-      <button class="vote-btn" onclick="vote('${img}')">투표</button>
+      <button class="vote-btn" disabled style="opacity:0.3;cursor:default;">투표</button>
     `;
     grid.appendChild(card);
   });
@@ -240,10 +240,9 @@ document.getElementById('overlay').addEventListener('click', function(e) {
   if (e.target === this) closeOverlay();
 });
 
-document.getElementById('overlayVoteBtn').addEventListener('click', function() {
-  vote(currentOverlayImg);
-  closeOverlay();
-});
+document.getElementById('overlayVoteBtn').disabled = true;
+document.getElementById('overlayVoteBtn').style.opacity = '0.3';
+document.getElementById('overlayVoteBtn').style.cursor = 'default';
 
 function resetVotes() {
   if (confirm('모든 투표를 초기화하시겠습니까?')) {
